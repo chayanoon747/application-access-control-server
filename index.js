@@ -80,10 +80,10 @@ app.post('/api/signin', async (req, res) => {
             // บันทึกการเข้าสู่ระบบไม่สำเร็จ
             await con.query(
                 'INSERT INTO login_logs (user_email, success, message) VALUES ($1, $2, $3)',
-                [email, false, 'User not found']
+                [email, false, 'Email or password is incorrect.']
             );
 
-            return res.status(400).send('User not found.');
+            return res.status(400).json({message: 'Email or password is incorrect.'});
         }
 
         // ตรวจสอบว่าบัญชีถูกล็อคหรือไม่
@@ -99,7 +99,7 @@ app.post('/api/signin', async (req, res) => {
                     [email, false, 'Account is locked']
                 );
 
-                return res.status(403).send('Account is locked. Please try again later.');
+                return res.status(403).json({message: 'Account is locked. Please try again later.'});
             } else {
                 // ปลดล็อคบัญชีหลังจาก 1 นาที
                 await con.query('UPDATE users SET is_locked = FALSE, login_attempts = 0, lock_time = NULL WHERE email = $1', [email]);
@@ -115,17 +115,17 @@ app.post('/api/signin', async (req, res) => {
             // บันทึกการเข้าสู่ระบบไม่สำเร็จ
             await con.query(
                 'INSERT INTO login_logs (user_email, success, message) VALUES ($1, $2, $3)',
-                [email, false, 'Account is locked']
+                [email, false, 'Email or password is incorrect.']
             );
 
             // ตรวจสอบจำนวนครั้งที่พยายามเข้าสู่ระบบ
             if (user.login_attempts + 1 >= 5) {
                 const lockTime = new Date(); // เวลาปัจจุบัน
                 await con.query('UPDATE users SET is_locked = TRUE, lock_time = $1 WHERE email = $2', [lockTime, email]);
-                return res.status(403).send('Account locked due to too many failed login attempts.');
+                return res.status(403).json({message: 'Account locked due to too many failed login attempts.'})
             }
 
-            return res.status(400).send('Invalid credentials.');
+            return res.status(400).json({message: 'Email or password is incorrect.'})
         }
 
         // รีเซ็ตจำนวนครั้งที่พยายามเข้าสู่ระบบเมื่อเข้าสู่ระบบสำเร็จ
@@ -138,7 +138,7 @@ app.post('/api/signin', async (req, res) => {
 
         // ถ้าเกิน 90 วันให้ส่ง response กลับเพื่อบังคับให้เปลี่ยนรหัสผ่าน
         if (daysSinceLastChange >= 90) {
-            return res.status(403).json({ message: 'You need to change your password. It has been more than 90 days since the last change.' });
+            return res.status(403).json({message: 'You need to change your password. It has been more than 90 days since the last change.'})
         }
 
         // บันทึกการเข้าสู่ระบบสำเร็จ
@@ -148,10 +148,10 @@ app.post('/api/signin', async (req, res) => {
         );
 
         // ส่ง JWT หรือข้อมูลอื่น ๆ ที่ต้องการ
-        res.status(200).send('Login successful.');
+        res.status(200).json({message: 'Login successful.'})
     } catch (error) {
         console.error(error);
-        res.status(500).send('Error during login.');
+        res.status(500).json({message: 'Error during login.'})
     }
 });
 
@@ -184,10 +184,10 @@ app.post('/api/request-password-reset', async (req, res) => {
             text: `Click the following link to reset your password: ${resetLink}`
         });
 
-        res.status(200).send('Password reset link sent to your email.');
+        res.status(200).json({message: 'Password reset link sent to your email.'})
     } catch (error) {
         console.error(error);
-        res.status(500).send('Error while sending reset link.');
+        res.status(500).json({message: 'Error while sending reset link.'})
     }
 });
 
@@ -202,7 +202,12 @@ app.post('/api/reset-password/:token', async (req, res) => {
         const result = await con.query('SELECT * FROM users WHERE reset_token = $1 AND reset_token_expiration > $2', [token, expiration]);
 
         if (result.rows.length === 0) {
-            return res.status(400).send('Invalid or expired token.');
+            return res.status(400).json({message: 'Invalid or expired token.'})
+        }
+
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{7,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            return res.status(400).json({ message: 'Password must be at least 7 characters long and include at least one uppercase letter, one lowercase letter, and one number.' });
         }
 
         // แฮชรหัสผ่านใหม่
@@ -211,23 +216,88 @@ app.post('/api/reset-password/:token', async (req, res) => {
         // อัปเดตรหัสผ่านในฐานข้อมูลและลบ token
         await con.query('UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expiration = NULL WHERE reset_token = $2', [hashedPassword, token]);
 
-        res.status(200).send('Password has been reset successfully.');
+        res.status(200).json({message: 'Password has been reset successfully.'})
     } catch (error) {
         console.error(error);
-        res.status(500).send('Error resetting password.');
+        res.status(500).json({message: 'Error resetting password.'})
     }
 });
 
 // API สำหรับการเปลี่ยนรหัสผ่าน
 app.post('/api/change-password', async (req, res) => {
-    const { email, newPassword } = req.body;
+    const { email, currentPassword, newPassword } = req.body;
 
-    // ตรวจสอบว่า email และ newPassword ถูกส่งมา
-    if (!email || !newPassword) {
-        return res.status(400).json({ message: 'Email and new password are required' });
+    // ตรวจสอบว่า email currentPassword และ newPassword ถูกส่งมา
+    if (!email || !currentPassword || !newPassword) {
+        return res.status(400).json({ message: 'Email, Password and new password are required' });
     }
 
     try {
+
+        // ค้นหาผู้ใช้จากอีเมล
+        const userResult = await con.query('SELECT * FROM users WHERE email = $1', [email]);
+        const user = userResult.rows[0];
+
+        if (!user) {
+            // บันทึกการเข้าสู่ระบบไม่สำเร็จ
+            await con.query(
+                'INSERT INTO login_logs (user_email, success, message) VALUES ($1, $2, $3)',
+                [email, false, 'Email or password is incorrect.']
+            );
+
+            return res.status(400).json({message: 'Email or password is incorrect.'});
+        }
+
+        // ตรวจสอบว่าบัญชีถูกล็อคหรือไม่
+        if (user.is_locked) {
+            const lockDuration = 1 * 60 * 1000; // 1 นาที
+            const currentTime = Date.now();
+            const lockTime = new Date(user.lock_time).getTime();
+
+            if (currentTime - lockTime < lockDuration) {
+                // บันทึกการเข้าสู่ระบบไม่สำเร็จ
+                await con.query(
+                    'INSERT INTO login_logs (user_email, success, message) VALUES ($1, $2, $3)',
+                    [email, false, 'Account is locked']
+                );
+
+                return res.status(403).json({message: 'Account is locked. Please try again later.'});
+            } else {
+                // ปลดล็อคบัญชีหลังจาก 1 นาที
+                await con.query('UPDATE users SET is_locked = FALSE, login_attempts = 0, lock_time = NULL WHERE email = $1', [email]);
+            }
+        }
+
+        // ตรวจสอบรหัสผ่าน
+        const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+        if (!isMatch) {
+            // เพิ่มจำนวนครั้งที่พยายามเข้าสู่ระบบไม่สำเร็จ
+            await con.query('UPDATE users SET login_attempts = login_attempts + 1 WHERE email = $1', [email]);
+
+            // บันทึกการเข้าสู่ระบบไม่สำเร็จ
+            await con.query(
+                'INSERT INTO login_logs (user_email, success, message) VALUES ($1, $2, $3)',
+                [email, false, 'Email or password is incorrect.']
+            );
+
+            // ตรวจสอบจำนวนครั้งที่พยายามเข้าสู่ระบบ
+            if (user.login_attempts + 1 >= 5) {
+                const lockTime = new Date(); // เวลาปัจจุบัน
+                await con.query('UPDATE users SET is_locked = TRUE, lock_time = $1 WHERE email = $2', [lockTime, email]);
+                return res.status(403).json({message: 'Account locked due to too many failed login attempts.'})
+            }
+
+            return res.status(400).json({message: 'Email or password is incorrect.'})
+        }
+
+        // รีเซ็ตจำนวนครั้งที่พยายามเข้าสู่ระบบเมื่อเข้าสู่ระบบสำเร็จ
+        await con.query('UPDATE users SET login_attempts = 0 WHERE email = $1', [email]);
+
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{7,}$/;
+        if (!passwordRegex.test(newPassword)) {
+            return res.status(400).json({ message: 'Password must be at least 7 characters long and include at least one uppercase letter, one lowercase letter, and one number.' });
+        }
+
         // แฮชรหัสผ่านใหม่
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
@@ -238,7 +308,14 @@ app.post('/api/change-password', async (req, res) => {
             [hashedPassword, email]
         );
 
-        res.status(200).send('Password has been changed successfully.');
+        // บันทึกการเปลี่ยนรหัสผ่านสำเร็จ
+        await con.query(
+            'INSERT INTO login_logs (user_email, success, message) VALUES ($1, $2, $3)',
+            [email, true, 'Password has been changed successfully.']
+        );
+
+
+        res.status(200).json({ message: 'Password has been changed successfully.'});
     } catch (error) {
         console.error('Error changing password:', error);
         res.status(500).json({ message: 'Internal server error' });
