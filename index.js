@@ -322,6 +322,16 @@ app.post('/api/change-password', async (req, res) => {
     }
 });
 
+app.get('/api/logs', async (req, res) => {
+    const result = await con.query('SELECT * FROM login_logs');
+    try{
+        res.status(200).json(result.rows);
+    } catch (error){
+        console.error(error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
 
 // เริ่มต้นเซิร์ฟเวอร์
 app.listen(PORT, () => {
