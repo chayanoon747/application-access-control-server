@@ -215,7 +215,7 @@ app.post('/api/reset-password', async (req, res) => {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
         // อัปเดตรหัสผ่านในฐานข้อมูลและลบ token
-        await con.query('UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expiration = NULL WHERE reset_token = $2', [hashedPassword, token]);
+        await con.query('UPDATE users SET password_hash = $1, password_last_changed = NOW(), reset_token = NULL, reset_token_expiration = NULL WHERE reset_token = $2', [hashedPassword, token]);
 
         res.status(200).json({message: 'Password has been reset successfully.'})
     } catch (error) {
