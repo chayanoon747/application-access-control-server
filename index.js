@@ -193,9 +193,8 @@ app.post('/api/request-password-reset', async (req, res) => {
     }
 });
 
-app.post('/api/reset-password/:token', async (req, res) => {
-    const { token } = req.params;
-    const { newPassword } = req.body;
+app.post('/api/reset-password', async (req, res) => {
+    const { newPassword, token } = req.body;
 
     try {
         const expiration = new Date(Date.now()).toISOString();
