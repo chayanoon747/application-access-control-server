@@ -45,6 +45,12 @@ app.post('/api/signup', async (req, res) => {
     }
 
     try {
+        // ตรวจสอบว่า email ซ้ำหรือไม่
+        const emailCheck = await con.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (emailCheck.rows.length > 0) {
+            return res.status(400).json({ message: 'Email already exists' });
+        }
+
         // แฮชรหัสผ่าน
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
