@@ -30,6 +30,36 @@ con.connect()
         console.error('Database connection error', err.stack);
     });
 
+const generateToken = (user)=>{
+    const payload = { id: user.id, email: user.email }; // กำหนด payload ที่ต้องการ
+    const secret = process.env.JWT_SECRET; // คีย์ลับที่ใช้ในการสร้าง token
+    const options = { expiresIn: '1h' }; // ระบุว่า token มีอายุการใช้งาน 1 ชั่วโมง
+  
+    return jwt.sign(payload, secret, options);
+}
+
+// Middleware สำหรับตรวจสอบ JWT token
+const authenticateToken = (req, res, next)=> {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1]; // แยกคำว่า 'Bearer' ออก
+  
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+  
+    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+          if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({ message: 'Token expired' }); // 401: Unauthorized เมื่อ token หมดอายุ
+          }
+          return res.status(403).json({ message: 'Invalid token' }); // 403: Forbidden สำหรับ token ที่ไม่ถูกต้อง
+        }
+        
+        req.user = user; // เก็บข้อมูลผู้ใช้ที่ถอดรหัสได้ใน req.user
+        next(); // ดำเนินการต่อ
+    });
+}
+
 // API สำหรับการสมัครสมาชิก
 app.post('/api/signup', async (req, res) => {
     let { email, password } = req.body;
@@ -166,10 +196,13 @@ app.post('/api/signin', async (req, res) => {
             [email, true, 'Login successful']
         );
 
+         // สร้าง JWT token
+        const token = generateToken(user);
+
         // ส่ง JWT หรือข้อมูลอื่น ๆ ที่ต้องการ
-        res.status(200).json({message: 'Login successful.'})
+        res.status(200).json({message: 'Login successful.', token: token, user: user});
     } catch (error) {
-        console.error(error);
+        //console.error(error);
         res.status(500).json({message: 'Error during login.'})
     }
 });
@@ -343,7 +376,7 @@ app.post('/api/change-password', async (req, res) => {
     }
 });
 
-app.get('/api/logs', async (req, res) => {
+app.post('/api/logs', authenticateToken, async (req, res) => {
     const result = await con.query('SELECT * FROM login_logs');
     try{
         res.status(200).json(result.rows);
@@ -351,6 +384,10 @@ app.get('/api/logs', async (req, res) => {
         console.error(error);
         res.status(500).json({ message: 'Internal server error' });
     }
+});
+
+app.post('/api/verify-jwt-token', authenticateToken, async (req, res) => {
+    return res.status(200).json({message: 'Authentication successful'});
 });
 
 
