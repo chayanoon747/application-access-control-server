@@ -32,12 +32,15 @@ con.connect()
 
 // API สำหรับการสมัครสมาชิก
 app.post('/api/signup', async (req, res) => {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
 
     // ตรวจสอบว่า email และ password ถูกส่งมา
     if (!email || !password) {
         return res.status(400).json({ message: 'Email and password are required' });
     }
+
+    // แปลง email เป็นพิมพ์เล็ก
+    email = email.toLowerCase();
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]{7,}$/;
     if (!passwordRegex.test(password)) {
@@ -77,7 +80,15 @@ app.post('/api/signup', async (req, res) => {
 
 // API สำหรับการเข้าสู่ระบบ
 app.post('/api/signin', async (req, res) => {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+
+    // ตรวจสอบว่า email และ password ถูกส่งมา
+    if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // แปลง email เป็นพิมพ์เล็ก
+    email = email.toLowerCase();
 
     try {
         // ค้นหาผู้ใช้จากอีเมล
@@ -232,12 +243,15 @@ app.post('/api/reset-password', async (req, res) => {
 
 // API สำหรับการเปลี่ยนรหัสผ่าน
 app.post('/api/change-password', async (req, res) => {
-    const { email, currentPassword, newPassword } = req.body;
+    let { email, currentPassword, newPassword } = req.body;
 
     // ตรวจสอบว่า email currentPassword และ newPassword ถูกส่งมา
     if (!email || !currentPassword || !newPassword) {
         return res.status(400).json({ message: 'Email, Password and new password are required' });
     }
+
+    // แปลง email เป็นพิมพ์เล็ก
+    email = email.toLowerCase();
 
     try {
 
