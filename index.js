@@ -94,13 +94,18 @@ app.post('/api/signup', async (req, res) => {
             [email, hashedPassword]
         );
 
+        // สร้าง JWT token
+        const token = generateToken(result.rows[0]);
+        
         // ส่งข้อมูลผู้ใช้ที่ถูกสร้างขึ้น
         res.status(201).json({
             message: 'User registered successfully',
             user: {
                 id: result.rows[0].id,
-                email: result.rows[0].email
-            }
+                email: result.rows[0].email,
+                role: result.rows[0].role
+            },
+            token: token
         });
     } catch (error) {
         console.error('Error inserting user:', error);
@@ -196,7 +201,7 @@ app.post('/api/signin', async (req, res) => {
             [email, true, 'Login successful']
         );
 
-         // สร้าง JWT token
+        // สร้าง JWT token
         const token = generateToken(user);
 
         // ส่ง JWT หรือข้อมูลอื่น ๆ ที่ต้องการ
