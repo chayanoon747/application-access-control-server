@@ -94,6 +94,12 @@ app.post('/api/signup', async (req, res) => {
             [email, hashedPassword]
         );
 
+        // บันทึกการเข้าสู่ระบบสำเร็จ
+        await con.query(
+            'INSERT INTO login_logs (user_email, success, message) VALUES ($1, $2, $3)',
+            [email, true, 'Sign up successful']
+        );
+
         // สร้าง JWT token
         const token = generateToken(result.rows[0]);
         
