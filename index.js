@@ -142,7 +142,7 @@ app.post('/api/signin', async (req, res) => {
 
         // ตรวจสอบว่าบัญชีถูกล็อคหรือไม่
         if (user.is_locked) {
-            const lockDuration = 1 * 60 * 1000; // 1 นาที
+            const lockDuration = 30 * 60 * 1000; // 30 นาที
             const currentTime = Date.now();
             const lockTime = new Date(user.lock_time).getTime();
 
@@ -155,7 +155,7 @@ app.post('/api/signin', async (req, res) => {
 
                 return res.status(403).json({message: 'Account is locked. Please try again later.'});
             } else {
-                // ปลดล็อคบัญชีหลังจาก 1 นาที
+                // ปลดล็อคบัญชีหลังจาก 30 นาที
                 await con.query('UPDATE users SET is_locked = FALSE, login_attempts = 0, lock_time = NULL WHERE email = $1', [email]);
             }
         }
