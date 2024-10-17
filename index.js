@@ -234,7 +234,7 @@ app.post('/api/request-password-reset', async (req, res) => {
             }
         });
 
-        const resetLink = `http://localhost:3001/reset-password/${token}`;
+        const resetLink = `http://localhost:3000/reset-password/${token}`;
         await transporter.sendMail({
             to: email,
             subject: 'Password Reset',
